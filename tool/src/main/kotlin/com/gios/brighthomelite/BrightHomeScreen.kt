@@ -14,7 +14,6 @@ import com.thelightphone.sdk.InitialScreen
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.SealedLightActivity
 import com.thelightphone.sdk.ui.LightBarButton
-import com.thelightphone.sdk.ui.LightBottomBar
 import com.thelightphone.sdk.ui.LightFullscreenModal
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightLazyScrollView
@@ -90,7 +89,7 @@ class BrightHomeScreen(sealedActivity: SealedLightActivity) :
                     }
 
                     if (state.paired) {
-                        LightBottomBar(
+                        FitBottomBar(
                             items = HomeTab.entries.map { tab ->
                                 LightBarButton.Text(
                                     text = tab.title,
