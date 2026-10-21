@@ -1,3 +1,5 @@
+<a href="https://github.com/sponsors/gi-os"><img src="https://raw.githubusercontent.com/gi-os/gi-os/main/images/bright-sponsors.svg" width="100%" alt="Thank you to my sponsors"></a>
+
 # BrightHome Lite
 
 > **This is the Lite version.** BrightHome Lite is built only with Light's official SDK, so it can go in the Light Tool Library. It is the same tool, packaged so Light can build and sign it. For the full app, get [BrightHome](https://github.com/gi-os/BrightHome) ([on BrightMarket](https://brightmarket.gzl.dev/app/com.thelightphone.brighthome/)).
