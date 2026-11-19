@@ -54,6 +54,13 @@ data class BrightHomeUiState(
     val unassigned: AreaRow? = null,
     val scenes: List<EntityRow> = emptyList(),
     val toast: String? = null,
+    /** A brief success line, such as "Movie night done". */
+    val notice: String? = null,
+    /**
+     * Why the connection failed, while there is nothing to show. Set only when the status
+     * is Failed and no entities have loaded; the tabs then show it instead of empty lists.
+     */
+    val connectError: String? = null,
 )
 
 private const val UNASSIGNED_AREA = "__unassigned__"
@@ -74,6 +81,7 @@ class BrightHomeViewModel(
         val config: HaConfig?,
         val message: String?,
         val tab: HomeTab,
+        val notice: String?,
     )
 
     private data class World(
@@ -88,7 +96,10 @@ class BrightHomeViewModel(
         repository.config,
         repository.message,
         tab,
-    ) { status, config, message, currentTab -> Connection(status, config, message, currentTab) }
+        repository.notice,
+    ) { status, config, message, currentTab, notice ->
+        Connection(status, config, message, currentTab, notice)
+    }
 
     private val world = combine(
         repository.entities,
@@ -150,13 +161,18 @@ class BrightHomeViewModel(
             total = loose.size,
         )
 
+        val connectError = (conn.status as? ConnectionStatus.Failed)
+            ?.takeIf { paired && world.entities.isEmpty() }
+            ?.reason
+
         return BrightHomeUiState(
             loading = paired && world.entities.isEmpty() &&
                 conn.status is ConnectionStatus.Connecting,
             paired = paired,
             tab = conn.tab,
             status = conn.status,
-            statusLine = statusLine(conn.status),
+            // The error body says it once; the line under the bar must not repeat it.
+            statusLine = if (connectError != null) null else conn.notice ?: statusLine(conn.status),
             host = conn.config?.displayHost.orEmpty(),
             favorites = favoriteRows,
             areas = roomRows,
@@ -164,6 +180,8 @@ class BrightHomeViewModel(
             unassigned = unassigned,
             scenes = scenes,
             toast = conn.message,
+            notice = conn.notice,
+            connectError = connectError,
         )
     }
 
@@ -298,6 +316,9 @@ class BrightHomeViewModel(
     fun act(entityId: String) = repository.act(viewModelScope, entityId)
 
     fun refresh() = repository.refresh(viewModelScope)
+
+    /** Runs the whole connect path again. [refresh] cannot, because it needs a live client. */
+    fun reconnect() = repository.reconnect(viewModelScope)
 
     fun toggleFavorite(entityId: String) {
         viewModelScope.launch { repository.toggleFavorite(entityId) }

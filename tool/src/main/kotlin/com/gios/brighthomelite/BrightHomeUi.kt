@@ -256,23 +256,87 @@ internal fun CenteredNotice(
 /**
  * The one line the connection is allowed to say. It sits directly under the top bar so
  * it reads as chrome, and it is absent entirely when the socket is live.
+ *
+ * With [onRetry] it is an error over data that is still showing: readable text, and a
+ * tap runs the retry.
  */
 @Composable
-internal fun StatusLine(text: String) {
+internal fun StatusLine(text: String, onRetry: (() -> Unit)? = null) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (onRetry != null) Modifier.lightClickable { onRetry() } else Modifier)
             .padding(
                 horizontal = EDGE_INSET_UNITS.gridUnitsAsDp(),
                 vertical = 2.dp,
             ),
     ) {
+        if (onRetry != null) {
+            LightText(
+                text = text.trimEnd('.') + ". Tap to try again.",
+                variant = LightTextVariant.Detail,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else {
+            LightText(
+                text = text,
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * The body of every tab when the connection failed and nothing has loaded: the reason in
+ * readable text, then the two ways out.
+ */
+@Composable
+internal fun ConnectErrorBody(reason: String, onRetry: () -> Unit, onEdit: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = (EDGE_INSET_UNITS * 2).gridUnitsAsDp()),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        LightText(text = "Could not connect", variant = LightTextVariant.Copy, align = TextAlign.Center)
+        LightText(text = reason, variant = LightTextVariant.Copy, align = TextAlign.Center)
+        Box(modifier = Modifier.height(12.dp))
         LightText(
-            text = text,
+            text = "Try again",
+            variant = LightTextVariant.Button,
+            align = TextAlign.Center,
+            underline = true,
+            modifier = Modifier.lightClickable { onRetry() }.padding(vertical = 6.dp),
+        )
+        LightText(
+            text = "Edit connection",
+            variant = LightTextVariant.Button,
+            align = TextAlign.Center,
+            underline = true,
+            modifier = Modifier.lightClickable { onEdit() }.padding(vertical = 6.dp),
+        )
+    }
+}
+
+/** A small standing hint under a list whose rows have more controls behind a hold. */
+@Composable
+internal fun HoldHint() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = EDGE_INSET_UNITS.gridUnitsAsDp(), vertical = 2.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        LightText(
+            text = "Hold a row for more controls",
             variant = LightTextVariant.Superfine,
             lighten = true,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+            align = TextAlign.Center,
         )
     }
 }

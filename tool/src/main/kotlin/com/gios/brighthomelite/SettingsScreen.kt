@@ -92,7 +92,12 @@ class SettingsScreen(
 
                         Box(modifier = Modifier.height(16.dp))
 
+                        // Reconnects when the connection is down; the Connection line above
+                        // shows it working, and a brief line says when a refresh landed.
                         Action("Refresh now") { homeViewModel.refresh() }
+                        state.notice?.let {
+                            LightText(text = it, variant = LightTextVariant.Detail, lighten = true)
+                        }
                         Action("Edit favorites") { goBack(SettingsAction.EditFavorites) }
                         Action("Scan a new setup code") { goBack(SettingsAction.Repair) }
 
