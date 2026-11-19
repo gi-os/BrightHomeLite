@@ -275,14 +275,24 @@ class PairingScreen(sealedActivity: SealedLightActivity) :
 class QrScanScreen(sealedActivity: SealedLightActivity) :
     SimpleLightScreen<String?>(sealedActivity) {
 
+    // The scanner can report the same code on consecutive frames; only the first may pop
+    // the screen, or a second goBack would pop the screen underneath too.
+    private var done = false
+
+    private fun finish(value: String?) {
+        if (done) return
+        done = true
+        goBack(value)
+    }
+
     @Composable
     override fun Content() {
         val themeColors by LightThemeController.colors.collectAsState()
         LightTheme(colors = themeColors) {
             LightQrCodeScanner(
                 title = "Scan setup code",
-                onScanned = { goBack(it) },
-                onBack = { goBack(null) },
+                onScanned = { finish(it) },
+                onBack = { finish(null) },
                 modifier = Modifier.background(LightThemeTokens.colors.background),
             )
         }

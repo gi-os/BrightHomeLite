@@ -24,6 +24,9 @@ private const val CONFIRM_TIMEOUT_MILLIS = 6_000L
 /** How long the wheel has to be still before the value is sent. */
 private const val ADJUST_DEBOUNCE_MILLIS = 550L
 
+/** How long a success line stays up under the top bar. */
+private const val NOTICE_MILLIS = 2_500L
+
 object BrightHomePreferences {
     val CONFIG = stringPreferencesKey("ha_config")
     val FAVORITES = stringPreferencesKey("favorites")
@@ -88,6 +91,12 @@ class HaRepository(private val dataStore: DataStore<Preferences>) {
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    /** A brief success line ("Movie night done"). Errors go through [message] instead. */
+    private val _notice = MutableStateFlow<String?>(null)
+    val notice: StateFlow<String?> = _notice.asStateFlow()
+
+    private var noticeJob: Job? = null
+
     private var client: HaClient? = null
     private var connectionJob: Job? = null
 
@@ -106,6 +115,25 @@ class HaRepository(private val dataStore: DataStore<Preferences>) {
     private val adjustJobs = mutableMapOf<String, Job>()
 
     private var loaded = false
+
+    private fun showNotice(scope: CoroutineScope, text: String) {
+        _notice.value = text
+        noticeJob?.cancel()
+        noticeJob = scope.launch {
+            delay(NOTICE_MILLIS)
+            _notice.value = null
+        }
+    }
+
+    /**
+     * What to tell the person. Our own errors already read well; anything else is a raw
+     * network exception, which becomes "Could not reach <host>." rather than a Ktor message.
+     */
+    private fun reason(error: Throwable, fallback: String? = null): String {
+        if (error is HaException) return error.message ?: fallback ?: "That did not go through."
+        val host = _config.value?.displayHost
+        return if (host.isNullOrBlank()) "Could not reach Home Assistant." else "Could not reach $host."
+    }
 
     /**
      * Reads what was stored last time, once.
@@ -189,9 +217,7 @@ class HaRepository(private val dataStore: DataStore<Preferences>) {
                     },
                     onFailure = { error ->
                         if (!current()) return@launch
-                        _status.value = ConnectionStatus.Failed(
-                            error.message ?: "Could not reach ${config.displayHost}.",
-                        )
+                        _status.value = ConnectionStatus.Failed(reason(error))
                         return@launch
                     },
                 )
@@ -337,7 +363,7 @@ class HaRepository(private val dataStore: DataStore<Preferences>) {
             haClient.callService(call).fold(
                 onSuccess = {
                     if (Domains.controlKind(state.domain) == ControlKind.Momentary) {
-                        _message.value = "${state.friendlyName} — done"
+                        showNotice(scope, "${state.friendlyName} done")
                     }
                     // A dead socket never sends the confirming state_changed, so the
                     // guess would otherwise stay on screen forever. Rather than snap
@@ -350,7 +376,7 @@ class HaRepository(private val dataStore: DataStore<Preferences>) {
                 },
                 onFailure = { error ->
                     retract(entityId, predicted)
-                    _message.value = error.message ?: "That did not go through."
+                    _message.value = reason(error)
                 },
             )
             clearJobs.remove(entityId)
@@ -402,7 +428,7 @@ class HaRepository(private val dataStore: DataStore<Preferences>) {
                     _pending.update { current ->
                         if (current[entityId] == value) current - entityId else current
                     }
-                    _message.value = error.message ?: "That did not go through."
+                    _message.value = reason(error)
                 },
             )
             adjustJobs.remove(entityId)
@@ -418,25 +444,42 @@ class HaRepository(private val dataStore: DataStore<Preferences>) {
         }
         scope.launch(Dispatchers.IO) {
             haClient.callService(call).onFailure { error ->
-                _message.value = failureNote ?: error.message ?: "That did not go through."
+                _message.value = failureNote ?: reason(error)
             }
         }
     }
 
-    /** Re-pulls the snapshot without tearing the socket down. */
+    /**
+     * Re-pulls the snapshot without tearing the socket down. With no client (the connect
+     * failed, or the app was paused) there is nothing to re-pull from, so it runs the full
+     * connect path instead.
+     */
     fun refresh(scope: CoroutineScope) {
-        val haClient = client ?: return
+        val haClient = client
+        if (haClient == null) {
+            reconnect(scope)
+            return
+        }
         scope.launch(Dispatchers.IO) {
             haClient.states().fold(
                 onSuccess = { snapshot ->
                     _entities.value = snapshot.associateBy { it.entityId }
                     _optimistic.value = emptyMap()
                     if (adjustJobs.isEmpty()) _pending.value = emptyMap()
+                    showNotice(scope, "Refreshed")
                 },
                 onFailure = { error ->
-                    _message.value = error.message ?: "Refresh failed."
+                    _message.value = reason(error, "Refresh failed.")
                 },
             )
+        }
+    }
+
+    /** Drops whatever is left of the old connection and opens a new one, as pairing does. */
+    fun reconnect(scope: CoroutineScope) {
+        scope.launch {
+            stopAndJoin()
+            start(scope)
         }
     }
 

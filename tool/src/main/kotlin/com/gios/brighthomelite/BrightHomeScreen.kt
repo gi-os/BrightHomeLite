@@ -74,7 +74,12 @@ class BrightHomeScreen(sealedActivity: SealedLightActivity) :
                         ),
                     )
 
-                    state.statusLine?.let { StatusLine(it) }
+                    state.statusLine?.let { line ->
+                        // A failure or a dropped socket over rows that are still showing: tap to retry.
+                        val retryable = state.notice == null &&
+                            (state.status is ConnectionStatus.Failed || state.status is ConnectionStatus.Stale)
+                        StatusLine(line, onRetry = if (retryable) ({ viewModel.reconnect() }) else null)
+                    }
 
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         if (!state.paired) {
@@ -83,10 +88,23 @@ class BrightHomeScreen(sealedActivity: SealedLightActivity) :
                                 actionLabel = "Set it up",
                                 onAction = { openPairing() },
                             )
+                        } else if (state.connectError != null) {
+                            ConnectErrorBody(
+                                reason = state.connectError!!,
+                                onRetry = { viewModel.reconnect() },
+                                onEdit = { openPairing() },
+                            )
                         } else {
                             TabBody(state, rowHeight, rowUnits)
                         }
                     }
+
+                    val holdable = when (state.tab) {
+                        HomeTab.Favorites -> state.favorites.any { it.hasDetail }
+                        HomeTab.Scenes -> state.scenes.any { it.hasDetail }
+                        HomeTab.Rooms -> false
+                    }
+                    if (state.paired && state.connectError == null && holdable) HoldHint()
 
                     if (state.paired) {
                         FitBottomBar(
